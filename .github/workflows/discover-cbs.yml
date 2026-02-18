@@ -197,27 +197,50 @@ jobs:
         run: |
           set -euo pipefail
 
-          MANIFEST=$(cat /tmp/manifest.json)
-          TOTAL=$(echo "$MANIFEST" | jq 'length')
-          echo "Posting $TOTAL manifest entries to Worker..."
+          TOTAL=$(jq 'length' /tmp/manifest.json)
+          echo "Posting $TOTAL manifest entries to Worker in batches..."
 
-          RESPONSE=$(curl -sf -w "\n%{http_code}" \
-            -X POST "${INGEST_WEBHOOK_URL}/api/manifest" \
-            -H "Authorization: Bearer ${INGEST_AUTH_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"entries\": $MANIFEST}")
+          # Send in batches of 10 to avoid Worker timeouts
+          BATCH_SIZE=10
+          BATCH_NUM=0
+          TOTAL_PROCESSED=0
+          TOTAL_ERRORS=0
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
+          for OFFSET in $(seq 0 $BATCH_SIZE $((TOTAL - 1))); do
+            BATCH_NUM=$((BATCH_NUM + 1))
+            BATCH_END=$((OFFSET + BATCH_SIZE))
+            if [ "$BATCH_END" -gt "$TOTAL" ]; then
+              BATCH_END=$TOTAL
+            fi
 
-          echo "Worker response (HTTP $HTTP_CODE): $BODY"
+            echo "  Batch $BATCH_NUM: entries $OFFSET-$((BATCH_END - 1))"
 
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Worker returned HTTP $HTTP_CODE"
-            exit 1
-          fi
+            jq "{entries: .[$OFFSET:$BATCH_END]}" /tmp/manifest.json > /tmp/payload.json
 
-          echo "Successfully posted manifest to Worker"
+            RESPONSE=$(curl -sf -w "\n%{http_code}" \
+              -X POST "${INGEST_WEBHOOK_URL}/api/manifest" \
+              -H "Authorization: Bearer ${INGEST_AUTH_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/payload.json) || {
+              echo "::warning::Batch $BATCH_NUM failed"
+              TOTAL_ERRORS=$((TOTAL_ERRORS + 1))
+              sleep 2
+              continue
+            }
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            echo "    Response (HTTP $HTTP_CODE): $BODY"
+
+            BATCH_PROCESSED=$(echo "$BODY" | jq -r '.processed // 0')
+            TOTAL_PROCESSED=$((TOTAL_PROCESSED + BATCH_PROCESSED))
+
+            # Rate limit: wait between batches
+            sleep 2
+          done
+
+          echo ""
+          echo "=== Done: $TOTAL_PROCESSED files processed, $TOTAL_ERRORS batch errors ==="
 
       - name: No new files
         if: steps.discover.outputs.total == '0'
