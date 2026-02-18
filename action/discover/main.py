@@ -104,7 +104,7 @@ def post_manifest(entries: list[dict], base_url: str, token: str) -> tuple[int, 
                     "Content-Type": "application/json",
                 },
                 json={"entries": batch},
-                timeout=120,
+                timeout=180,
             )
             if resp.status_code == 200:
                 result = resp.json()

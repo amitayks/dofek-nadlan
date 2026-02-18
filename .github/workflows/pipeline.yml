@@ -48,15 +48,32 @@ jobs:
       matrix: ${{ steps.list.outputs.matrix }}
       has_work: ${{ steps.list.outputs.has_work }}
     steps:
+      - name: Check R2 secrets
+        id: check-secrets
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          if [ -z "$R2_ACCOUNT_ID" ]; then
+            echo "::warning::R2 secrets not configured — skipping PDF extraction"
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.check-secrets.outputs.has_secrets == 'true'
       - uses: actions/setup-python@v5
+        if: steps.check-secrets.outputs.has_secrets == 'true'
         with:
           python-version: '3.12'
           cache: 'pip'
       - run: pip install -r action/requirements.txt
+        if: steps.check-secrets.outputs.has_secrets == 'true'
 
       - id: list
+        if: steps.check-secrets.outputs.has_secrets == 'true'
         env:
+          PYTHONUNBUFFERED: '1'
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -67,8 +84,8 @@ jobs:
           from action.extract.r2_client import list_extraction_requests
           import json, os
           run_id = os.environ.get('RUN_ID', '')
-          requests = list_extraction_requests(run_id)
-          ids = [r['request_id'] for r in requests]
+          reqs = list_extraction_requests(run_id)
+          ids = [r['request_id'] for r in reqs]
           print(f'Found {len(ids)} extraction requests')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write(f'matrix={json.dumps(ids)}\n')
@@ -95,6 +112,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - name: Extract PDF
         env:
+          PYTHONUNBUFFERED: '1'
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -117,6 +135,7 @@ jobs:
       - run: pip install -r action/requirements.txt
       - name: Send webhook
         env:
+          PYTHONUNBUFFERED: '1'
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

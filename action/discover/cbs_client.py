@@ -17,23 +17,35 @@ SP_HEADERS = {
 ALLOWED_EXTENSIONS = {"xlsx", "xls", "docx", "doc", "pdf", "zip"}
 
 
-def list_doclib_folders(section: str, year: int) -> list[str]:
-    """List DocLib subfolder names for a section+year.
+def _parse_sp_response(resp: requests.Response, label: str) -> dict | None:
+    """Parse SharePoint API response, handling various content-types."""
+    if resp.status_code != 200:
+        print(f"  Warning: {label} returned HTTP {resp.status_code}", flush=True)
+        return None
+    # Reject HTML responses (CBS WAF block)
+    ct = resp.headers.get("content-type", "")
+    if "html" in ct:
+        print(f"  Warning: {label} returned HTML (blocked?)", flush=True)
+        return None
+    # Try to parse JSON regardless of content-type header
+    try:
+        return resp.json()
+    except Exception:
+        print(f"  Warning: {label} returned non-JSON (content-type: {ct})", flush=True)
+        return None
 
-    Args:
-        section: 'publications' or 'mediarelease'
-        year: e.g. 2026
-    """
+
+def list_doclib_folders(section: str, year: int) -> list[str]:
+    """List DocLib subfolder names for a section+year."""
     url = (
         f"{CBS_BASE}/he/{section}/Madad/_api/web/"
         f"GetFolderByServerRelativeUrl('/he/{section}/Madad/DocLib/{year}')/Folders"
     )
     try:
         resp = requests.get(url, headers=SP_HEADERS, timeout=30)
-        if resp.status_code != 200 or "json" not in resp.headers.get("content-type", ""):
-            print(f"  Warning: DocLib folders API returned {resp.status_code} for {section}/{year}", flush=True)
+        data = _parse_sp_response(resp, f"DocLib folders {section}/{year}")
+        if not data:
             return []
-        data = resp.json()
         return [item["Name"] for item in data.get("value", [])]
     except Exception as e:
         print(f"  Error listing DocLib folders for {section}/{year}: {e}", flush=True)
@@ -41,19 +53,16 @@ def list_doclib_folders(section: str, year: int) -> list[str]:
 
 
 def list_folder_files(section: str, year: int, folder: str) -> list[dict[str, Any]]:
-    """List files in a DocLib subfolder.
-
-    Returns list of dicts with Name, ServerRelativeUrl, Length.
-    """
+    """List files in a DocLib subfolder."""
     url = (
         f"{CBS_BASE}/he/{section}/Madad/_api/web/"
         f"GetFolderByServerRelativeUrl('/he/{section}/Madad/DocLib/{year}/{folder}')/Files"
     )
     try:
         resp = requests.get(url, headers=SP_HEADERS, timeout=30)
-        if resp.status_code != 200 or "json" not in resp.headers.get("content-type", ""):
+        data = _parse_sp_response(resp, f"files {section}/{year}/{folder}")
+        if not data:
             return []
-        data = resp.json()
         files = []
         for f in data.get("value", []):
             ext = f["Name"].rsplit(".", 1)[-1].lower() if "." in f["Name"] else ""
@@ -79,11 +88,12 @@ def get_page_items(section: str, list_guid: str, top: int = 20) -> list[dict[str
     )
     try:
         resp = requests.get(url, headers=SP_HEADERS, timeout=30)
-        if resp.status_code != 200 or "json" not in resp.headers.get("content-type", ""):
-            print(f"  Warning: page items API returned {resp.status_code} for {section}", flush=True)
+        data = _parse_sp_response(resp, f"page items {section}")
+        if not data:
             return []
-        data = resp.json()
-        return data.get("value", [])
+        items = data.get("value", [])
+        print(f"  Page items content-type: {resp.headers.get('content-type', 'N/A')}, items: {len(items)}", flush=True)
+        return items
     except Exception as e:
         print(f"  Error getting page items for {section}: {e}", flush=True)
         return []
