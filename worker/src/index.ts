@@ -1,6 +1,7 @@
 import type { Env } from './types';
 import { runPipeline } from './pipeline/orchestrator';
 import { handleIngest } from './routes/ingest';
+import { handleManifest } from './routes/manifest';
 import { handleStatus } from './routes/status';
 import { handleTrigger } from './routes/trigger';
 import { handleHealth } from './routes/health';
@@ -36,6 +37,9 @@ export default {
       switch (true) {
         case path === '/api/ingest' && request.method === 'POST':
           response = await handleIngest(request, env);
+          break;
+        case path === '/api/manifest' && request.method === 'POST':
+          response = await handleManifest(request, env);
           break;
         case path === '/api/status' && request.method === 'GET':
           response = await handleStatus(request, env);

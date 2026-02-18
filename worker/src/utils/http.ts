@@ -37,7 +37,6 @@ export async function fetchWithRetry(
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'GovDataPipeline/1.0 (automated data collection)',
           ...headers,
         },
       });
@@ -72,13 +71,21 @@ export async function fetchJson<T = unknown>(
   const response = await fetchWithRetry(url, {
     ...options,
     headers: {
-      Accept: 'application/json;odata=verbose',
+      Accept: 'application/json;odata=nometadata',
       ...options.headers,
     },
   });
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText} for ${url}`);
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('json') && !contentType.includes('odata')) {
+    const bodyPreview = (await response.text()).slice(0, 200);
+    throw new Error(
+      `Expected JSON but got ${contentType} from ${url}: ${bodyPreview}`
+    );
   }
 
   return response.json() as Promise<T>;
