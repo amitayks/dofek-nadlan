@@ -34,6 +34,7 @@ jobs:
       - name: Discover CBS publications and media releases
         id: discover
         env:
+          PYTHONUNBUFFERED: '1'
           INGEST_WEBHOOK_URL: ${{ secrets.INGEST_WEBHOOK_URL }}
           INGEST_AUTH_TOKEN: ${{ secrets.INGEST_AUTH_TOKEN }}
         run: python -m action.discover.main

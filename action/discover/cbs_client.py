@@ -1,7 +1,9 @@
 """CBS SharePoint REST API client for discovering publications and media releases."""
 
+from __future__ import annotations
+
 import requests
-from typing import Any
+from typing import Any, Optional
 
 CBS_BASE = "https://www.cbs.gov.il"
 PUB_LIST_GUID = "71b30cd4-0261-4757-9482-a52c5a6da90a"
@@ -29,12 +31,12 @@ def list_doclib_folders(section: str, year: int) -> list[str]:
     try:
         resp = requests.get(url, headers=SP_HEADERS, timeout=30)
         if resp.status_code != 200 or "json" not in resp.headers.get("content-type", ""):
-            print(f"  Warning: DocLib folders API returned {resp.status_code} for {section}/{year}")
+            print(f"  Warning: DocLib folders API returned {resp.status_code} for {section}/{year}", flush=True)
             return []
         data = resp.json()
         return [item["Name"] for item in data.get("value", [])]
     except Exception as e:
-        print(f"  Error listing DocLib folders for {section}/{year}: {e}")
+        print(f"  Error listing DocLib folders for {section}/{year}: {e}", flush=True)
         return []
 
 
@@ -64,7 +66,7 @@ def list_folder_files(section: str, year: int, folder: str) -> list[dict[str, An
                 })
         return files
     except Exception as e:
-        print(f"  Error listing files in {section}/{year}/{folder}: {e}")
+        print(f"  Error listing files in {section}/{year}/{folder}: {e}", flush=True)
         return []
 
 
@@ -78,12 +80,12 @@ def get_page_items(section: str, list_guid: str, top: int = 20) -> list[dict[str
     try:
         resp = requests.get(url, headers=SP_HEADERS, timeout=30)
         if resp.status_code != 200 or "json" not in resp.headers.get("content-type", ""):
-            print(f"  Warning: page items API returned {resp.status_code} for {section}")
+            print(f"  Warning: page items API returned {resp.status_code} for {section}", flush=True)
             return []
         data = resp.json()
         return data.get("value", [])
     except Exception as e:
-        print(f"  Error getting page items for {section}: {e}")
+        print(f"  Error getting page items for {section}: {e}", flush=True)
         return []
 
 
@@ -93,7 +95,7 @@ def build_manifest_entry(
     year: int,
     folder: str,
     file_info: dict[str, Any],
-    page_item: dict[str, Any] | None,
+    page_item: Optional[dict[str, Any]],
 ) -> dict[str, Any]:
     """Build a manifest entry dict from file info and page metadata."""
     if source == "cbs-publications":
