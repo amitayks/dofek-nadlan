@@ -2,6 +2,7 @@ import type { Env } from './types';
 import { runPipeline } from './pipeline/orchestrator';
 import { handleIngest } from './routes/ingest';
 import { handleManifest } from './routes/manifest';
+import { handleKnownUrls } from './routes/known-urls';
 import { handleStatus } from './routes/status';
 import { handleTrigger } from './routes/trigger';
 import { handleHealth } from './routes/health';
@@ -40,6 +41,9 @@ export default {
           break;
         case path === '/api/manifest' && request.method === 'POST':
           response = await handleManifest(request, env);
+          break;
+        case path === '/api/known-urls' && request.method === 'GET':
+          response = await handleKnownUrls(request, env);
           break;
         case path === '/api/status' && request.method === 'GET':
           response = await handleStatus(request, env);

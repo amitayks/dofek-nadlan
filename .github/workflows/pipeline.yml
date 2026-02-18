@@ -1,0 +1,126 @@
+name: Pipeline — CBS Discovery + PDF Extraction
+
+on:
+  schedule:
+    - cron: '30 23 * * *'  # 23:30 UTC daily
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Pipeline run ID (date string, e.g., 2026-02-17)'
+        required: false
+        type: string
+      skip_discovery:
+        description: 'Skip CBS discovery, only run PDF extraction'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  # ─── Job 1: CBS Discovery ───────────────────────────────────
+  discover:
+    if: ${{ !inputs.skip_discovery }}
+    runs-on: ubuntu-latest
+    outputs:
+      new_files: ${{ steps.discover.outputs.new_files }}
+      run_id: ${{ steps.discover.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r action/requirements.txt
+
+      - name: Discover CBS publications and media releases
+        id: discover
+        env:
+          INGEST_WEBHOOK_URL: ${{ secrets.INGEST_WEBHOOK_URL }}
+          INGEST_AUTH_TOKEN: ${{ secrets.INGEST_AUTH_TOKEN }}
+        run: python -m action.discover.main
+
+  # ─── Job 2: PDF Extraction (matrix) ─────────────────────────
+  discover-work:
+    needs: discover
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+      has_work: ${{ steps.list.outputs.has_work }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r action/requirements.txt
+
+      - id: list
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          RUN_ID: ${{ inputs.run_id || needs.discover.outputs.run_id || '' }}
+        run: |
+          python -c "
+          from action.extract.r2_client import list_extraction_requests
+          import json, os
+          run_id = os.environ.get('RUN_ID', '')
+          requests = list_extraction_requests(run_id)
+          ids = [r['request_id'] for r in requests]
+          print(f'Found {len(ids)} extraction requests')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'matrix={json.dumps(ids)}\n')
+              f.write(f'has_work={\"true\" if ids else \"false\"}\n')
+          "
+
+  extract:
+    needs: discover-work
+    if: needs.discover-work.outputs.has_work == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        request_id: ${{ fromJson(needs.discover-work.outputs.matrix) }}
+      fail-fast: false
+      max-parallel: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r action/requirements.txt
+      - name: Install poppler for pdf2image
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - name: Extract PDF
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          ANTHRIPIC_API_KEY: ${{ secrets.ANTHRIPIC_API_KEY }}
+          REQUEST_ID: ${{ matrix.request_id }}
+        run: python -m action.extract.main
+
+  # ─── Job 3: Notify Worker ───────────────────────────────────
+  notify:
+    needs: [discover-work, extract]
+    if: always() && needs.discover-work.outputs.has_work == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r action/requirements.txt
+      - name: Send webhook
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          INGEST_WEBHOOK_URL: ${{ secrets.INGEST_WEBHOOK_URL }}
+          INGEST_AUTH_TOKEN: ${{ secrets.INGEST_AUTH_TOKEN }}
+          RUN_ID: ${{ inputs.run_id || needs.discover.outputs.run_id || '' }}
+        run: python -m action.extract.webhook

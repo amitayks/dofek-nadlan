@@ -13,7 +13,7 @@ export async function triggerGitHubAction(
   // For now, they need to be set in wrangler.toml or as secrets
   const owner = 'ozkeisar';
   const repo = 'Klikat';
-  const workflowFile = 'extract-pdfs.yml';
+  const workflowFile = 'pipeline.yml';
 
   const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/dispatches`;
 
