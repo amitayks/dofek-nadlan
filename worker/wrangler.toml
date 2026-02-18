@@ -1,0 +1,25 @@
+name = "gov-data-pipeline"
+main = "src/index.ts"
+compatibility_date = "2025-02-14"
+
+[triggers]
+crons = ["0 0 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gov-data-pipeline-db"
+database_id = "f8881758-2cf6-455e-a3af-1a85c7796c3c"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "gov-data-pipeline"
+
+[[kv_namespaces]]
+binding = "STATE"
+id = "a4cb8975baea4cee851fa4354dd032f2"
+
+# Secrets (set via `wrangler secret put`):
+# - GH_TOKEN
+# - INGEST_AUTH_TOKEN
+# - ANTHRIPIC_API_KEY

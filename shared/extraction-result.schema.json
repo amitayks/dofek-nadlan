@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ExtractionResult",
+  "description": "Result from GitHub Action PDF extraction, written to R2",
+  "type": "object",
+  "required": ["request_id", "status", "data", "confidence", "extraction_method", "processed_at"],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "pattern": "^req-\\d{4}-\\d{2}-\\d{2}-\\d{3,}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "extraction_failed", "partial"]
+    },
+    "data": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "Extracted records matching the request's extraction_schema"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "extraction_method": {
+      "type": "string",
+      "description": "e.g., pdf2image+claude_vision"
+    },
+    "pages_processed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "processed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "error_details": {
+      "type": "string",
+      "description": "Error message if status is extraction_failed"
+    }
+  }
+}
