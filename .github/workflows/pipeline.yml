@@ -52,9 +52,12 @@ jobs:
         id: check-secrets
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
-          if [ -z "$R2_ACCOUNT_ID" ]; then
-            echo "::warning::R2 secrets not configured — skipping PDF extraction"
+          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_BUCKET_NAME" ]; then
+            echo "::warning::R2 secrets not fully configured — skipping PDF extraction"
             echo "has_secrets=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_secrets=true" >> "$GITHUB_OUTPUT"
