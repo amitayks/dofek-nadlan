@@ -1,8 +1,8 @@
 name: Pipeline — CBS Discovery + PDF Extraction
 
 on:
-  schedule:
-    - cron: '30 23 * * *'  # 23:30 UTC daily
+  # schedule:
+  #   - cron: '30 23 * * *'  # 23:30 UTC daily
   workflow_dispatch:
     inputs:
       run_id:
